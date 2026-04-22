@@ -1234,18 +1234,18 @@ function updateDomElements() {
                 if (el.type === 'circle') { wrapper.style.borderRadius = '50%'; }
                 else if (el.type === 'rect' && el.rx) { wrapper.style.borderRadius = `${el.rx}px`; }
                 else if (el.type === 'diamond') {
-                    wrapper.style.clipPath = 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)';
-                    // CSS border não funciona com clip-path; usar SVG inline com polygon
-                    wrapper.style.borderColor = 'transparent'; wrapper.style.borderWidth = '0px';
-                    updatePolygonBorderSVG(wrapper, el,
-                        `${el.w/2},0 ${el.w},${el.h/2} ${el.w/2},${el.h} 0,${el.h/2}`);
+                    wrapper.style.clipPath = 'none';
+                    wrapper.style.borderColor = 'transparent'; 
+                    wrapper.style.borderWidth = '0px';
+                    wrapper.style.backgroundColor = 'transparent';
+                    updatePolygonBorderSVG(wrapper, el, `${el.w/2},0 ${el.w},${el.h/2} ${el.w/2},${el.h} 0,${el.h/2}`);
                 }
                 else if (el.type === 'triangle') {
-                    wrapper.style.clipPath = 'polygon(50% 0%, 100% 100%, 0% 100%)';
-                    // CSS border não funciona com clip-path; usar SVG inline com polygon
-                    wrapper.style.borderColor = 'transparent'; wrapper.style.borderWidth = '0px';
-                    updatePolygonBorderSVG(wrapper, el,
-                        `${el.w/2},0 ${el.w},${el.h} 0,${el.h}`);
+                    wrapper.style.clipPath = 'none';
+                    wrapper.style.borderColor = 'transparent'; 
+                    wrapper.style.borderWidth = '0px';
+                    wrapper.style.backgroundColor = 'transparent';
+                    updatePolygonBorderSVG(wrapper, el, `${el.w/2},0 ${el.w},${el.h} 0,${el.h}`);
                 }
             }
 
@@ -2048,7 +2048,6 @@ function updateConnectionSVGs() {
     const data = buildConnectionSVGData(conn);
     if (!data) { svg.innerHTML = ''; delete existing[conn.id]; return; }
 
-    // Calculando os limites exatos da seta para criar uma ViewBox rígida!
     const pad = 40; 
     const minX = Math.min(data.x1, data.x2, data.cx) - pad;
     const maxX = Math.max(data.x1, data.x2, data.cx) + pad;
@@ -2057,11 +2056,9 @@ function updateConnectionSVGs() {
     const w = maxX - minX;
     const h = maxY - minY;
 
-    // CAPTURAMOS O Z-INDEX E OPACITY AQUI
     const zIndex = conn._z !== undefined ? conn._z : -1;
     const opacity = conn.opacity !== undefined ? conn.opacity : 1;
 
-    // E INCLUÍMOS DIRETAMENTE NO cssText PARA NÃO SEREM SOBRESCRITOS
     svg.style.cssText = `position:absolute;left:${minX}px;top:${minY}px;width:${w}px;height:${h}px;overflow:visible;pointer-events:none;z-index:${zIndex};opacity:${opacity};`;
     svg.setAttribute('viewBox', `${minX} ${minY} ${w} ${h}`);
 
@@ -2094,19 +2091,23 @@ function updatePolygonBorderSVG(wrapper, el, points) {
   let svg = wrapper.querySelector('.shape-border-svg');
   const bWid = el.borderWidth || 0;
   const bCol = el.borderColor || 'transparent';
-  if (bWid > 0) {
-    if (!svg) {
-      svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      svg.className = 'shape-border-svg';
-      svg.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:visible;z-index:1;';
-      wrapper.insertBefore(svg, wrapper.firstChild);
-    }
-    svg.setAttribute('viewBox', `0 0 ${el.w} ${el.h}`);
-    // stroke-width doubled: a metade de fora é cortada pelo clip-path, sobra exatamente bWid
-    svg.innerHTML = `<polygon points="${points}" fill="none" stroke="${bCol}" stroke-width="${bWid * 2}" stroke-linejoin="miter"/>`;
-  } else {
-    if (svg) svg.remove();
+  const fCol = el.color || 'transparent'; // Agora o SVG que segura a cor
+
+  if (!svg) {
+    svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'shape-border-svg'); // Forma segura de aplicar classe
+    svg.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:visible;z-index:0;';
+    wrapper.insertBefore(svg, wrapper.firstChild);
   }
+  
+  const textEl = wrapper.querySelector('.dom-text-el');
+  if (textEl) {
+      textEl.style.position = 'relative';
+      textEl.style.zIndex = '1';
+  }
+
+  svg.setAttribute('viewBox', `0 0 ${el.w} ${el.h}`);
+  svg.innerHTML = `<polygon points="${points}" fill="${fCol}" stroke="${bCol}" stroke-width="${bWid}" stroke-linejoin="miter"/>`;
 }
 
 function updatePenSVGs() {
@@ -3100,12 +3101,30 @@ function elToSVG(el) {
   if (el.angle) { const b = getBounds(el); const cx = b.x + b.w/2, cy = b.y + b.h/2, deg = el.angle * 180 / Math.PI; transformAttr = `transform="rotate(${deg} ${cx} ${cy})"`; }
 
   const getForeignObjectText = (e) => {
-      const pad = getShapePad(e); let wrapperStyle = `width:100%; height:100%; display:table; background-color:${(e.type==='text'?'transparent':e.color)};`;
-      if(e.type !== 'text') { wrapperStyle += `border:${e.borderWidth}px solid ${e.borderColor};`; if(e.type === 'circle') wrapperStyle += 'border-radius:50%;'; else if(e.rx) wrapperStyle += `border-radius:${e.rx}px;`; }
-      let textElStyle = `display:table-cell; vertical-align:${(e.type==='text'?'top':'middle')}; text-align:${e.textAlign||'center'}; padding:${pad}px; box-sizing:border-box; font-family:${ff.replace(/'/g, "&apos;")}; font-size:${e.fontSize||18}px; color:${e.textColor||'#333'}; overflow-wrap:break-word; word-break:normal; margin:0;`;
+      const pad = getShapePad(e); 
+      let isPoly = (e.type === 'diamond' || e.type === 'triangle');
       
-      // A mágica: Adicionada a classe "dom-text-el" no container e aspas corretas no font-family
-      return `<foreignObject x="${e.x}" y="${e.y}" width="${e.w}" height="${e.h}" ${filterAttr} ${opa} ${transformAttr}><div xmlns="http://www.w3.org/1999/xhtml" style="${wrapperStyle}"><div class="dom-text-el" style="${textElStyle}">${e.html || e.text || ''}</div></div></foreignObject>`;
+      let wrapperStyle = `width:100%; height:100%; display:table; `;
+      if(!isPoly) wrapperStyle += `background-color:${(e.type==='text'?'transparent':e.color)};`;
+      
+      if(e.type !== 'text' && !isPoly) { 
+          wrapperStyle += `border:${e.borderWidth}px solid ${e.borderColor};`; 
+          if(e.type === 'circle') wrapperStyle += 'border-radius:50%;'; 
+          else if(e.rx) wrapperStyle += `border-radius:${e.rx}px;`; 
+      }
+      
+      let textElStyle = `display:table-cell; vertical-align:${(e.type==='text'?'top':'middle')}; text-align:${e.textAlign||'center'}; padding:${pad}px; box-sizing:border-box; font-family:${ff.replace(/'/g, "&apos;")}; font-size:${e.fontSize||18}px; color:${e.textColor||'#333'}; overflow-wrap:break-word; word-break:normal; margin:0;`;
+
+      let polySvg = '';
+      if(isPoly) {
+          let pts = e.type === 'diamond' 
+              ? `${e.w/2},0 ${e.w},${e.h/2} ${e.w/2},${e.h} 0,${e.h/2}` 
+              : `${e.w/2},0 ${e.w},${e.h} 0,${e.h}`;
+          polySvg = `<svg viewBox="0 0 ${e.w} ${e.h}" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:0;overflow:visible;"><polygon points="${pts}" fill="${e.color||'transparent'}" stroke="${e.borderColor||'transparent'}" stroke-width="${e.borderWidth||0}" stroke-linejoin="miter"/></svg>`;
+          textElStyle += 'position:relative;z-index:1;';
+      }
+      
+      return `<foreignObject x="${e.x}" y="${e.y}" width="${e.w}" height="${e.h}" ${filterAttr} ${opa} ${transformAttr}><div xmlns="http://www.w3.org/1999/xhtml" style="${wrapperStyle}">${polySvg}<div class="dom-text-el" style="${textElStyle}">${e.html || e.text || ''}</div></div></foreignObject>`;
   };
 
   switch(el.type){
@@ -3123,8 +3142,21 @@ function elToSVG(el) {
 }
 
 function connToSVG(conn) {
-  const pts = getConnectionPoints(conn); if(!pts) return ''; const {x1,y1,x2,y2} = pts, opa = conn.opacity !== undefined ? `opacity="${conn.opacity}"` : '';
-  return `<path d="M ${x1} ${y1} L ${x2} ${y2}" stroke="${conn.color}" stroke-width="${conn.lineWidth}" fill="transparent" ${conn.dash?`stroke-dasharray="8,5"`:''} ${opa}/>`;
+  const data = buildConnectionSVGData(conn); if(!data) return '';
+  const color = conn.color || '#555', lw = conn.lineWidth || 2, dashAttr = conn.dash ? 'stroke-dasharray="8,5"' : '';
+  const opa = conn.opacity !== undefined ? `opacity="${conn.opacity}"` : '';
+  
+  let svg = `<path d="${data.d}" stroke="${color}" stroke-width="${lw}" fill="transparent" stroke-linejoin="round" stroke-linecap="round" ${dashAttr} ${opa}/>`;
+  if (conn.startHead === 'arrow') svg += `<path d="${arrowSVGPath(data.x1, data.y1, data.angleStart, lw)}" fill="${color}" stroke="none" ${opa}/>`;
+  if (conn.endHead === 'arrow') svg += `<path d="${arrowSVGPath(data.x2, data.y2, data.angleEnd, lw)}" fill="${color}" stroke="none" ${opa}/>`;
+  
+  if (conn.label) {
+      const textColor = isDarkMode ? '#fff' : '#333', bgColor = isDarkMode ? '#16213e' : '#f4f4f4';
+      const tw = conn.label.length * 7 + 8;
+      const safeLabel = conn.label.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      svg += `<rect x="${data.cx - tw/2}" y="${data.cy - 10}" width="${tw}" height="20" fill="${bgColor}"/><text x="${data.cx}" y="${data.cy}" text-anchor="middle" dominant-baseline="middle" font-size="13" font-family="${conn.fontFamily || 'system-ui'}" fill="${textColor}">${safeLabel}</text>`;
+  }
+  return svg;
 }
 
 function openExportModal() {
@@ -3190,20 +3222,17 @@ async function doExportImage() {
 async function exportAsImageTela(area, fmt) {
   const container = document.getElementById('canvas-container');
 
-  // 1. Limpar seleção para esconder caixas de edição
   clearSelection();
   const uiLayer = document.getElementById('ui-layer');
   const originalUIDisplay = uiLayer.style.display;
   uiLayer.style.display = 'none';
 
-  // 2. Guarda o estado original
   const origViewX = viewX, origViewY = viewY, origScale = scale;
   const origW = W, origH = H;
   const origCvsW = cvs.width, origCvsH = cvs.height;
 
   let captureWidth = W, captureHeight = H;
 
-  // 3. Setup de Quadro Completo
   if (area === 'full') {
       const bounds = getWorldBounds();
       const pad = 128;
@@ -3222,165 +3251,194 @@ async function exportAsImageTela(area, fmt) {
       container.style.height = captureHeight + 'px';
   }
 
-  render(); // Atualiza toda a tela para a nova escala/posicao
-
-  // Espera 100ms para o DOM processar as mudanças
+  render(); 
   await new Promise(r => setTimeout(r, 100));
 
-  // ========================================================================
-  // PREPARAÇÃO NATIVA: Usar o Canvas (Tinta Real) para burlar o html2canvas
-  // ========================================================================
+  const replacements = [];
+  const domLayer = document.getElementById('dom-layer');
+  
+  // 1. Conexões nativas para preservar Z-Index
+  connections.forEach(conn => {
+      const svg = domLayer.querySelector(`.conn-svg-el[data-conn-id="${conn.id}"]`);
+      if (!svg) return;
+      const left = parseFloat(svg.style.left) || 0, top = parseFloat(svg.style.top) || 0;
+      const w = parseFloat(svg.style.width) || 0, h = parseFloat(svg.style.height) || 0;
 
-  // A. Ocultar SVGs que html2canvas não renderiza corretamente (conexões e lápis)
-  const svgConns = domLayer.querySelectorAll('.conn-svg-el');
-  svgConns.forEach(svg => svg.style.visibility = 'hidden');
-  const svgPens = domLayer.querySelectorAll('.pen-svg-el');
-  svgPens.forEach(svg => svg.style.visibility = 'hidden');
+      const tCvs = document.createElement('canvas');
+      tCvs.width = w * 2; tCvs.height = h * 2;
+      tCvs.style.cssText = svg.style.cssText;
+      
+      const tCtx = tCvs.getContext('2d');
+      tCtx.scale(2, 2);
+      tCtx.translate(-left, -top);
+      drawConnectionOn(tCtx, conn);
 
-  // B. Substituir shadows CSS por versões compatíveis com html2canvas
-  const originalFilters    = new Map(); // armazena filter + textShadow
-  const originalBoxShadows = new Map(); // armazena boxShadow (para evitar sombra dupla)
-  extractAllElements(elements).forEach(el => {
-      const wrapper = document.getElementById(el.domId);
-      if (!wrapper) return;
-
-      if (el.hasShadow) {
-          // filter: já é 'none' para não-texto; guardamos por garantia
-          originalFilters.set(wrapper, wrapper.style.filter);
-          wrapper.style.filter = 'none';
-
-          if (el.type === 'text') {
-              // Texto usa textShadow — html2canvas suporta bem
-              const textEl = wrapper.querySelector('.dom-text-el');
-              if (textEl) {
-                  originalFilters.set(textEl, textEl.style.textShadow);
-                  textEl.style.textShadow = `2px 3px 4px ${isDarkMode ? 'rgba(0,0,0,0.8)' : 'rgba(0,0,0,0.4)'}`;
-              }
-          } else {
-              // Para formas: remover boxShadow CSS para evitar sombra dupla com a
-              // sombra desenhada manualmente no canvas abaixo (seção C)
-              originalBoxShadows.set(wrapper, wrapper.style.boxShadow);
-              wrapper.style.boxShadow = 'none';
-          }
-      }
+      svg.parentNode.insertBefore(tCvs, svg);
+      svg.style.display = 'none';
+      replacements.push({ orig: svg, temp: tCvs });
   });
 
-  // C. Triângulos/Losangos: html2canvas ignora clip-path → desenhar fill+borda no ctx principal
-  //    e esvaziar o fundo do wrapper para que só o texto seja capturado pelo html2canvas
-  const polygonElStyles   = new Map();
-  const hiddenBorderSvgs  = [];
-  ctx.save();
-  ctx.translate(viewX, viewY);
-  ctx.scale(scale, scale);
+  // 2. Lápis/Caneta nativos
   extractAllElements(elements).forEach(el => {
-      if (el.type !== 'diamond' && el.type !== 'triangle') return;
-      const wrapper = document.getElementById(el.domId);
-      if (!wrapper) return;
-      // Salva e remove estilos que causam o "extra fill"
-      polygonElStyles.set(wrapper, {
-          bg: wrapper.style.backgroundColor,
-          cp: wrapper.style.clipPath,
-          bc: wrapper.style.borderColor,
-          bw: wrapper.style.borderWidth
-      });
-      wrapper.style.backgroundColor = 'transparent';
-      wrapper.style.clipPath         = 'none';
-      wrapper.style.borderColor      = 'transparent';
-      wrapper.style.borderWidth      = '0px';
-      // Oculta o SVG de borda (será desenhado diretamente no canvas)
-      const bSvg = wrapper.querySelector('.shape-border-svg');
-      if (bSvg) { bSvg.style.visibility = 'hidden'; hiddenBorderSvgs.push(bSvg); }
-      // Desenha o preenchimento e borda exatos no ctx (fica abaixo do DOM, acima do fundo)
-      ctx.save();
-      ctx.globalAlpha = el.opacity !== undefined ? el.opacity : 1;
-      if (el.angle) {
-          const cx = el.x + el.w / 2, cy = el.y + el.h / 2;
-          ctx.translate(cx, cy); ctx.rotate(el.angle); ctx.translate(-cx, -cy);
-      }
-      ctx.beginPath();
-      if (el.type === 'diamond') {
-          ctx.moveTo(el.x + el.w/2, el.y);
-          ctx.lineTo(el.x + el.w,   el.y + el.h/2);
-          ctx.lineTo(el.x + el.w/2, el.y + el.h);
-          ctx.lineTo(el.x,          el.y + el.h/2);
-          ctx.closePath();
-      } else {
-          ctx.moveTo(el.x + el.w/2, el.y);
-          ctx.lineTo(el.x + el.w,   el.y + el.h);
-          ctx.lineTo(el.x,          el.y + el.h);
-          ctx.closePath();
-      }
-      ctx.fillStyle = el.color || '#ffffff';
-      ctx.fill();
-      if ((el.borderWidth || 0) > 0) {
-          ctx.strokeStyle = el.borderColor || '#333';
-          ctx.lineWidth   = el.borderWidth;
-          ctx.lineJoin    = 'miter';
-          ctx.stroke();
-      }
-      ctx.restore();
-  });
-  ctx.restore();
+      if (el.type !== 'pen') return;
+      const svg = domLayer.querySelector(`.pen-svg-el[data-pen-id="${el.id}"]`);
+      if (!svg) return;
 
-  // E. Desenhar sombras, lápis e conexões diretamente no connCtx (canvas acima do DOM)
-  connCtx.clearRect(0, 0, captureWidth, captureHeight);
-  connCtx.save();
-  connCtx.translate(viewX, viewY);
-  connCtx.scale(scale, scale);
+      const left = parseFloat(svg.style.left) || 0, top = parseFloat(svg.style.top) || 0;
+      const w = parseFloat(svg.style.width) || 0, h = parseFloat(svg.style.height) || 0;
 
-  // 1. Sombras de formas (desenhadas antes das conexões para ficarem atrás)
-  extractAllElements(elements).forEach(el => {
-      if (!el.hasShadow || el.type === 'text' || el.type === 'pen' || el.type === 'group') return;
-      connCtx.save();
-      if (el.angle) {
-          const cx = el.x + el.w / 2, cy = el.y + el.h / 2;
-          connCtx.translate(cx, cy); connCtx.rotate(el.angle); connCtx.translate(-cx, -cy);
-      }
-      connCtx.shadowColor = isDarkMode ? 'rgba(0,0,0,0.7)' : 'rgba(0,0,0,0.25)';
-      connCtx.shadowBlur = 14; connCtx.shadowOffsetX = 2; connCtx.shadowOffsetY = 4;
-      connCtx.fillStyle = 'black';
-      connCtx.beginPath();
-      if (el.type === 'circle')        { connCtx.arc(el.x + el.w/2, el.y + el.h/2, el.w/2, 0, Math.PI*2); }
-      else if (el.type === 'diamond')  { connCtx.moveTo(el.x+el.w/2,el.y); connCtx.lineTo(el.x+el.w,el.y+el.h/2); connCtx.lineTo(el.x+el.w/2,el.y+el.h); connCtx.lineTo(el.x,el.y+el.h/2); connCtx.closePath(); }
-      else if (el.type === 'triangle') { connCtx.moveTo(el.x+el.w/2,el.y); connCtx.lineTo(el.x+el.w,el.y+el.h); connCtx.lineTo(el.x,el.y+el.h); connCtx.closePath(); }
-      else if (el.type === 'rect')     { connCtx.beginPath(); roundRect(connCtx, el.x, el.y, el.w, el.h, el.rx||0); connCtx.closePath(); }
-      else                             { connCtx.rect(el.x, el.y, el.w, el.h); }
-      connCtx.fill();
-      // Apaga o sólido, deixa apenas o brilho da sombra
-      connCtx.shadowColor = 'transparent';
-      connCtx.globalCompositeOperation = 'destination-out';
-      connCtx.fill();
-      connCtx.restore();
-  });
+      const tCvs = document.createElement('canvas');
+      tCvs.width = w * 2; tCvs.height = h * 2;
+      tCvs.style.cssText = svg.style.cssText;
 
-  // 2. Traços de caneta/lápis (redesenhados diretamente no canvas)
-  extractAllElements(elements).forEach(el => {
-      if (el.type !== 'pen' || !el.pts || el.pts.length < 2) return;
-      connCtx.save();
-      connCtx.globalAlpha = el.opacity !== undefined ? el.opacity : 1;
+      const tCtx = tCvs.getContext('2d');
+      tCtx.scale(2, 2);
+      tCtx.translate(-left, -top);
+      
+      tCtx.globalAlpha = el.opacity !== undefined ? el.opacity : 1;
       if (el.angle) {
           const b = getBounds(el);
           const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
-          connCtx.translate(cx, cy); connCtx.rotate(el.angle); connCtx.translate(-cx, -cy);
+          tCtx.translate(cx, cy); tCtx.rotate(el.angle); tCtx.translate(-cx, -cy);
       }
-      connCtx.strokeStyle = el.color || '#333';
-      connCtx.lineWidth = el.lineWidth || 2;
-      connCtx.lineJoin = 'round'; connCtx.lineCap = 'round';
-      connCtx.beginPath();
-      connCtx.moveTo(el.pts[0][0], el.pts[0][1]);
-      el.pts.slice(1).forEach(p => connCtx.lineTo(p[0], p[1]));
-      connCtx.stroke();
-      connCtx.restore();
+      tCtx.strokeStyle = el.color || '#333';
+      tCtx.lineWidth = el.lineWidth || 2;
+      tCtx.lineJoin = 'round'; tCtx.lineCap = 'round';
+      tCtx.beginPath();
+      tCtx.moveTo(el.pts[0][0], el.pts[0][1]);
+      el.pts.slice(1).forEach(p => tCtx.lineTo(p[0], p[1]));
+      tCtx.stroke();
+
+      svg.parentNode.insertBefore(tCvs, svg);
+      svg.style.display = 'none';
+      replacements.push({ orig: svg, temp: tCvs });
   });
 
-  // 3. Conexões (ficam acima das sombras e dos traços)
-  connections.forEach(conn => drawConnectionOn(connCtx, conn));
+  // 3. Triângulos e Losangos localmente + Text Shadows
+  const originalFilters = new Map();
+  extractAllElements(elements).forEach(el => {
+      const wrapper = document.getElementById(el.domId);
+      if (wrapper && el.hasShadow && el.type === 'text') {
+          originalFilters.set(wrapper, wrapper.style.filter);
+          wrapper.style.filter = 'none';
+          const textEl = wrapper.querySelector('.dom-text-el');
+          if (textEl) {
+              originalFilters.set(textEl, textEl.style.textShadow);
+              textEl.style.textShadow = `2px 3px 4px ${isDarkMode ? 'rgba(0,0,0,0.8)' : 'rgba(0,0,0,0.4)'}`;
+          }
+      }
 
-  connCtx.restore();
+      if (el.type !== 'diamond' && el.type !== 'triangle') return;
+      if (!wrapper) return;
+      
+      const tCvs = document.createElement('canvas');
+      tCvs.width = el.w * 2; tCvs.height = el.h * 2;
+      tCvs.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;';
+      
+      const tCtx = tCvs.getContext('2d');
+      tCtx.scale(2, 2);
+      
+      tCtx.globalAlpha = el.opacity !== undefined ? el.opacity : 1;
+      tCtx.beginPath();
+      if (el.type === 'diamond') {
+          tCtx.moveTo(el.w/2, 0); tCtx.lineTo(el.w, el.h/2);
+          tCtx.lineTo(el.w/2, el.h); tCtx.lineTo(0, el.h/2); tCtx.closePath();
+      } else {
+          tCtx.moveTo(el.w/2, 0); tCtx.lineTo(el.w, el.h);
+          tCtx.lineTo(0, el.h); tCtx.closePath();
+      }
+      tCtx.fillStyle = el.color || '#ffffff';
+      tCtx.fill();
+      if ((el.borderWidth || 0) > 0) {
+          tCtx.strokeStyle = el.borderColor || '#333';
+          tCtx.lineWidth = el.borderWidth;
+          tCtx.lineJoin = 'miter';
+          tCtx.stroke();
+      }
 
-  // ========================================================================
-  // 4. CAPTURA A FOTO
-  // ========================================================================
+      originalFilters.set(wrapper, {
+          bg: wrapper.style.backgroundColor, cp: wrapper.style.clipPath,
+          bc: wrapper.style.borderColor, bw: wrapper.style.borderWidth
+      });
+      wrapper.style.backgroundColor = 'transparent';
+      wrapper.style.clipPath = 'none';
+      wrapper.style.borderColor = 'transparent';
+      wrapper.style.borderWidth = '0px';
+
+      const textEl = wrapper.querySelector('.dom-text-el');
+      if (textEl) {
+          originalFilters.set(textEl, { pos: textEl.style.position, z: textEl.style.zIndex });
+          textEl.style.position = 'relative';
+          textEl.style.zIndex = '1';
+      }
+
+      wrapper.insertBefore(tCvs, wrapper.firstChild);
+      replacements.push({ wrapper, temp: tCvs });
+  });
+
+  // =========================================================================================
+  // 4. NOVO: SOMBRAS NOS POST-ITS E FORMAS (Gera a sombra no nível exato de z-index)
+  // =========================================================================================
+  const originalBoxShadows = new Map();
+  extractAllElements(elements).forEach(el => {
+      // Ignora elementos que não devem ter essa sombra gerada manualmente
+      if (!el.hasShadow || el.type === 'text' || el.type === 'pen' || el.type === 'group' || el.type === 'image' || el.type === 'embed') return;
+      const wrapper = document.getElementById(el.domId);
+      if (!wrapper) return;
+
+      // Desliga a sombra CSS problemática
+      originalBoxShadows.set(wrapper, wrapper.style.boxShadow);
+      wrapper.style.boxShadow = 'none';
+
+      const pad = 40;
+      const aabb = getAABB(el);
+      const minX = aabb.x - pad, minY = aabb.y - pad;
+      const w = aabb.w + pad*2, h = aabb.h + pad*2;
+
+      const sCvs = document.createElement('canvas');
+      sCvs.width = w * 2; sCvs.height = h * 2;
+      
+      // Mágica do z-index: pega o z-index do post-it e subtrai 1 (Fica exatamente embaixo dele e acima do restante!)
+      const z = (parseInt(wrapper.style.zIndex) || 0) - 1;
+      sCvs.style.cssText = `position:absolute;left:${minX}px;top:${minY}px;width:${w}px;height:${h}px;pointer-events:none;z-index:${z};`;
+      
+      const sCtx = sCvs.getContext('2d');
+      sCtx.scale(2, 2);
+      sCtx.translate(-minX, -minY);
+
+      sCtx.save();
+      if (el.angle) {
+          const cx = el.x + el.w / 2, cy = el.y + el.h / 2;
+          sCtx.translate(cx, cy); sCtx.rotate(el.angle); sCtx.translate(-cx, -cy);
+      }
+      
+      sCtx.shadowColor = isDarkMode ? 'rgba(0,0,0,0.7)' : 'rgba(0,0,0,0.25)';
+      sCtx.shadowBlur = 14; 
+      sCtx.shadowOffsetX = 2; 
+      sCtx.shadowOffsetY = 4;
+      sCtx.fillStyle = 'black';
+      
+      sCtx.beginPath();
+      if (el.type === 'circle')        { sCtx.arc(el.x + el.w/2, el.y + el.h/2, el.w/2, 0, Math.PI*2); }
+      else if (el.type === 'diamond')  { sCtx.moveTo(el.x+el.w/2,el.y); sCtx.lineTo(el.x+el.w,el.y+el.h/2); sCtx.lineTo(el.x+el.w/2,el.y+el.h); sCtx.lineTo(el.x,el.y+el.h/2); sCtx.closePath(); }
+      else if (el.type === 'triangle') { sCtx.moveTo(el.x+el.w/2,el.y); sCtx.lineTo(el.x+el.w,el.y+el.h); sCtx.lineTo(el.x,el.y+el.h); sCtx.closePath(); }
+      else if (el.type === 'rect')     { roundRect(sCtx, el.x, el.y, el.w, el.h, el.rx||0); }
+      else                             { sCtx.rect(el.x, el.y, el.w, el.h); } // Note e Formas
+      sCtx.fill();
+      
+      // Apaga o preenchimento, deixando apenas a sombra translúcida fora da borda
+      sCtx.shadowColor = 'transparent';
+      sCtx.globalCompositeOperation = 'destination-out';
+      sCtx.fill();
+      sCtx.restore();
+
+      domLayer.appendChild(sCvs);
+      replacements.push({ temp: sCvs });
+  });
+
+  connCtx.clearRect(0, 0, captureWidth, captureHeight);
+
+  // CAPTURA A FOTO COM TUDO NO LUGAR
   const canvasExport = await html2canvas(container, {
       backgroundColor: (fmt === 'jpg' || isDarkMode) ? (isDarkMode ? '#16213e' : '#f4f4f4') : null,
       scale: 2, 
@@ -3392,28 +3450,44 @@ async function exportAsImageTela(area, fmt) {
       y: 0
   });
 
-  // ========================================================================
-  // 5. LIMPEZA E RESTAURAÇÃO (O quadro volta ao normal em um piscar de olhos)
-  // ========================================================================
-
-  svgConns.forEach(svg => svg.style.visibility = 'visible');
-  svgPens.forEach(svg => svg.style.visibility = 'visible');
-
-  originalFilters.forEach((val, node) => {
-      if (node.classList && node.classList.contains('dom-text-el')) {
-          node.style.textShadow = val || 'none';
-      } else {
-          node.style.filter = val || 'none';
+  // RESTAURAÇÃO
+  replacements.forEach(rep => {
+      if (rep.orig) {
+          rep.orig.style.display = '';
+          rep.temp.remove();
+      } else if (rep.wrapper) {
+          rep.temp.remove();
+          const s = originalFilters.get(rep.wrapper);
+          if(s) {
+              rep.wrapper.style.backgroundColor = s.bg;
+              rep.wrapper.style.clipPath = s.cp;
+              rep.wrapper.style.borderColor = s.bc;
+              rep.wrapper.style.borderWidth = s.bw;
+          }
+          const textEl = rep.wrapper.querySelector('.dom-text-el');
+          const ts = originalFilters.get(textEl);
+          if (textEl && ts && ts.pos !== undefined) {
+              textEl.style.position = ts.pos;
+              textEl.style.zIndex = ts.z;
+          }
+      } else if (rep.temp) {
+          // Limpa os canvas de sombras do Passo 4
+          rep.temp.remove();
       }
   });
-  originalBoxShadows.forEach((val, node) => { node.style.boxShadow = val || 'none'; });
-  polygonElStyles.forEach((s, wrapper) => {
-      wrapper.style.backgroundColor = s.bg;
-      wrapper.style.clipPath        = s.cp;
-      wrapper.style.borderColor     = s.bc;
-      wrapper.style.borderWidth     = s.bw;
+
+  originalFilters.forEach((val, node) => {
+      if (typeof val === 'string') {
+          if (node.classList && node.classList.contains('dom-text-el')) {
+              node.style.textShadow = val || 'none';
+          } else {
+              node.style.filter = val || 'none';
+          }
+      }
   });
-  hiddenBorderSvgs.forEach(svg => { svg.style.visibility = ''; });
+
+  // Devolve o box-shadow original
+  originalBoxShadows.forEach((val, node) => { node.style.boxShadow = val || 'none'; });
 
   uiLayer.style.display = originalUIDisplay;
   
@@ -3427,11 +3501,8 @@ async function exportAsImageTela(area, fmt) {
   }
   
   scale = origScale; viewX = origViewX; viewY = origViewY;
-  
-  // O próprio render() limpa o "connCtx" e apaga todas as sombras manuais
   render(); 
 
-  // 6. Download
   const mime = fmt === 'jpg' ? 'image/jpeg' : 'image/png';
   const dataUrl = canvasExport.toDataURL(mime, 0.95);
   const a = document.createElement('a');
