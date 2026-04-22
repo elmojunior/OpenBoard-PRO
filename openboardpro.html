@@ -262,6 +262,7 @@ body{overflow:hidden;background:#f4f4f4;font-family:system-ui,sans-serif; transi
   </div>
 
   <div class="top-sep"></div>
+  <button onclick="openExportModal()" title="Exportar como Imagem"><svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></button>
   <button onclick="saveSVG()" title="Salvar Arquivo (Ctrl+S)"><svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg></button>
   <button onclick="loadSVG()" title="Abrir Arquivo"><svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></button>
   <input type="file" id="file-input" accept=".svg" style="display:none" onchange="onFileLoad(event)">
@@ -417,6 +418,42 @@ body{overflow:hidden;background:#f4f4f4;font-family:system-ui,sans-serif; transi
   </div>
   <div style="margin-top:20px;display:flex;justify-content:flex-end;">
     <button onclick="closeFontModal()" style="padding:9px 24px;background:#f0f0f0; border:1px solid #ddd;border-radius:8px;cursor:pointer;font-size:12px; font-weight:500;">Fechar</button>
+  </div>
+</div>
+
+<div id="export-modal-overlay" onclick="closeExportModal()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:9998;"></div>
+<div id="export-modal" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,0.3);z-index:9999;width:360px;padding:24px;font-size:13px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+    <h3 style="font-size:15px;font-weight:600;color:#333;">🖼️ Exportar como Imagem</h3>
+    <button onclick="closeExportModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#999;line-height:1;">×</button>
+  </div>
+  <div style="margin-bottom:16px;">
+    <div style="font-size:11px;font-weight:600;color:#666;margin-bottom:10px;">Formato</div>
+    <div style="display:flex;gap:10px;">
+      <label style="flex:1;display:flex;align-items:center;gap:8px;padding:10px 14px;border:1px solid #ddd;border-radius:8px;cursor:pointer;transition:0.15s;" id="exp-fmt-png-label">
+        <input type="radio" name="exp-fmt" value="png" checked onchange="updateExportLabels()"> PNG
+      </label>
+      <label style="flex:1;display:flex;align-items:center;gap:8px;padding:10px 14px;border:1px solid #ddd;border-radius:8px;cursor:pointer;transition:0.15s;" id="exp-fmt-jpg-label">
+        <input type="radio" name="exp-fmt" value="jpg" onchange="updateExportLabels()"> JPG
+      </label>
+    </div>
+  </div>
+  <div style="margin-bottom:24px;">
+    <div style="font-size:11px;font-weight:600;color:#666;margin-bottom:10px;">Área</div>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <label style="display:flex;align-items:flex-start;gap:8px;padding:10px 14px;border:1px solid #ddd;border-radius:8px;cursor:pointer;transition:0.15s;" id="exp-area-view-label">
+        <input type="radio" name="exp-area" value="view" checked style="margin-top:2px;" onchange="updateExportLabels()">
+        <div><div style="font-weight:500;">Vista atual</div><div style="font-size:11px;color:#888;margin-top:2px;">Exporta exatamente o que está visível na tela</div></div>
+      </label>
+      <label style="display:flex;align-items:flex-start;gap:8px;padding:10px 14px;border:1px solid #ddd;border-radius:8px;cursor:pointer;transition:0.15s;" id="exp-area-full-label">
+        <input type="radio" name="exp-area" value="full" style="margin-top:2px;" onchange="updateExportLabels()">
+        <div><div style="font-weight:500;">Quadro completo</div><div style="font-size:11px;color:#888;margin-top:2px;">Inclui todos os elementos com 128px de margem</div></div>
+      </label>
+    </div>
+  </div>
+  <div style="display:flex;gap:10px;">
+    <button onclick="closeExportModal()" style="flex:1;padding:10px;background:#f0f0f0;border:1px solid #ddd;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;">Cancelar</button>
+    <button onclick="doExportImage()" style="flex:2;padding:10px;background:linear-gradient(135deg,#6c47ff,#4f8ef7);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:13px;">Exportar</button>
   </div>
 </div>
 
@@ -1161,8 +1198,8 @@ function updateDomElements() {
             
             if (el.type === 'text') {
                 wrapper.style.backgroundColor = 'transparent';
-                if(el.hasShadow) { const shadowCol = isDarkMode ? 'rgba(0,0,0,0.8)' : 'rgba(0,0,0,0.4)'; wrapper.style.filter = `drop-shadow(2px 3px 3px ${shadowCol})`; } 
-                else { wrapper.style.filter = 'none'; }
+                // CORREÇÃO AQUI: Removido o "filter: drop-shadow" que quebrava no html2canvas
+                wrapper.style.filter = 'none'; 
                 wrapper.style.boxShadow = 'none'; wrapper.style.border = 'none'; 
             } else if (el.type === 'image') {
                 wrapper.style.boxShadow = cssShadow; wrapper.style.filter = 'none';
@@ -1194,10 +1231,22 @@ function updateDomElements() {
 
             } else {
                 wrapper.style.backgroundColor = el.color || 'transparent'; wrapper.style.boxShadow = cssShadow; wrapper.style.filter = 'none';
-                if (el.type === 'circle') { wrapper.style.borderRadius = '50%'; } 
-                else if (el.type === 'rect' && el.rx) { wrapper.style.borderRadius = `${el.rx}px`; } 
-                else if (el.type === 'diamond') { wrapper.style.clipPath = 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)'; } 
-                else if (el.type === 'triangle') { wrapper.style.clipPath = 'polygon(50% 0%, 100% 100%, 0% 100%)'; }
+                if (el.type === 'circle') { wrapper.style.borderRadius = '50%'; }
+                else if (el.type === 'rect' && el.rx) { wrapper.style.borderRadius = `${el.rx}px`; }
+                else if (el.type === 'diamond') {
+                    wrapper.style.clipPath = 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)';
+                    // CSS border não funciona com clip-path; usar SVG inline com polygon
+                    wrapper.style.borderColor = 'transparent'; wrapper.style.borderWidth = '0px';
+                    updatePolygonBorderSVG(wrapper, el,
+                        `${el.w/2},0 ${el.w},${el.h/2} ${el.w/2},${el.h} 0,${el.h/2}`);
+                }
+                else if (el.type === 'triangle') {
+                    wrapper.style.clipPath = 'polygon(50% 0%, 100% 100%, 0% 100%)';
+                    // CSS border não funciona com clip-path; usar SVG inline com polygon
+                    wrapper.style.borderColor = 'transparent'; wrapper.style.borderWidth = '0px';
+                    updatePolygonBorderSVG(wrapper, el,
+                        `${el.w/2},0 ${el.w},${el.h} 0,${el.h}`);
+                }
             }
 
             let linkIcon = wrapper.querySelector('.link-indicator');
@@ -1218,13 +1267,24 @@ function updateDomElements() {
                     fSize = bestFs; el.fontSize = bestFs; 
                 }
                 div.style.padding = `${pad}px`; div.style.fontFamily = el.fontFamily || 'system-ui'; div.style.color = el.textColor || (isDarkMode ? '#fff' : '#333'); div.style.textAlign = el.textAlign || (el.type === 'text' ? 'left' : 'center'); div.style.fontSize = `${fSize}px`;
+                
+                // CORREÇÃO AQUI: Aplicando text-shadow diretamente no texto (compatível com html2canvas)
+                if (el.type === 'text' && el.hasShadow) {
+                    const shadowCol = isDarkMode ? 'rgba(0,0,0,0.8)' : 'rgba(0,0,0,0.4)';
+                    div.style.textShadow = `2px 3px 3px ${shadowCol}`;
+                } else {
+                    div.style.textShadow = 'none';
+                }
             }
         }
     });
 
     const validIds = flatElements.map(e => e.domId);
-    Array.from(domLayer.children).forEach(child => { if(!child.classList.contains('conn-svg-el') && !validIds.includes(child.id)) child.remove(); });
+    Array.from(domLayer.children).forEach(child => {
+      if (!child.classList.contains('conn-svg-el') && !child.classList.contains('pen-svg-el') && !validIds.includes(child.id)) child.remove();
+    });
     updateConnectionSVGs();
+    updatePenSVGs();
 }
 
 function getConnectorPort(el, side, offset = 0) {
@@ -1729,13 +1789,16 @@ function onHandleMouseDown(e, handleType, el) {
         if (wrapper) wrapper.querySelectorAll('[style*="font-size"]').forEach(node => { delete node.dataset.origFs; });
     });
 
-    resizeStart = {
-        mx: mw.x, my: mw.y, ...getBounds(el),
-        ox: el.x, oy: el.y, orx: el.rx, ory: el.ry,
-        angle: el.angle || 0, cx: el.x + el.w / 2, cy: el.y + el.h / 2,
-        maxFontSize: el.maxFontSize || 24, fontSize: el.fontSize || 24, originalFontSize: el.fontSize || 24,
-        originalClone: JSON.parse(JSON.stringify(el))
-    };
+    const b = getBounds(el);
+  if (el.x === undefined || isNaN(el.x)) { el.x = b.x; el.y = b.y; el.w = b.w; el.h = b.h; }
+
+  resizeStart = {
+      mx: mw.x, my: mw.y, ...b,
+      ox: el.x, oy: el.y, orx: el.rx, ory: el.ry,
+      angle: el.angle || 0, cx: el.x + el.w / 2, cy: el.y + el.h / 2,
+      maxFontSize: el.maxFontSize || 24, fontSize: el.fontSize || 24, originalFontSize: el.fontSize || 24,
+      originalClone: JSON.parse(JSON.stringify(el))
+  };
 
     const cursors = { nw: 'nw-resize', n: 'n-resize', ne: 'ne-resize', w: 'w-resize', e: 'e-resize', sw: 'sw-resize', s: 's-resize', se: 'se-resize', 'conn-start': 'move', 'conn-end': 'move', 'conn-mid': 'move' };
     if (!handleType.startsWith('rot-')) cvs.style.cursor = cursors[handleType];
@@ -1758,12 +1821,9 @@ function drawBoxSelection() {
 }
 
 function drawElement(el) {
-  if (el.type === 'group') { el.items.forEach(drawElement); return; }
-  if (el.type === 'pen') {
-      ctx.save(); ctx.globalAlpha = el.opacity !== undefined ? el.opacity : 1; 
-      if (el.angle) { const b = getBounds(el); const cx = b.x + b.w/2, cy = b.y + b.h/2; ctx.translate(cx, cy); ctx.rotate(el.angle); ctx.translate(-cx, -cy); }
-      drawPen(el); ctx.restore();
-  }
+  // Pen elements are rendered as SVG in the DOM layer (updatePenSVGs) for correct z-ordering.
+  // Groups recurse only to trigger any canvas-side children (currently none besides pen).
+  if (el.type === 'group') { el.items.forEach(drawElement); }
 }
 
 function drawPen(el) {
@@ -1839,35 +1899,65 @@ function buildConnectionPathOn(targetCtx, conn) {
   pts.angleStart = angleStart; pts.angleEnd = angleEnd; return pts;
 }
 
+// Função para desenhar a conexão diretamente no Canvas (usada na exportação para burlar o html2canvas)
 function drawConnectionOn(targetCtx, conn) {
-  targetCtx.save(); targetCtx.globalAlpha = conn.opacity !== undefined ? conn.opacity : 1; targetCtx.strokeStyle=conn.color||'#555'; targetCtx.lineWidth=conn.lineWidth||2; if(conn.dash) targetCtx.setLineDash([8,5]);
+  targetCtx.save(); 
+  targetCtx.globalAlpha = conn.opacity !== undefined ? conn.opacity : 1; 
+  targetCtx.strokeStyle = conn.color || '#555'; 
+  targetCtx.lineWidth = conn.lineWidth || 2; 
+  if(conn.dash) targetCtx.setLineDash([8,5]);
+  
   const pts = buildConnectionPathOn(targetCtx, conn);
   if(pts) {
-      targetCtx.stroke(); targetCtx.setLineDash([]); 
+      targetCtx.stroke(); 
+      targetCtx.setLineDash([]); 
       
-      const headColor = conn.color||'#555';
+      const headColor = conn.color || '#555';
       const headLw = conn.lineWidth || 2;
-      if(conn.startHead === 'arrow') { drawArrowHeadRotated(targetCtx, pts.x1, pts.y1, pts.angleStart, headColor, headLw); }
-      if(conn.endHead === 'arrow') { drawArrowHeadRotated(targetCtx, pts.x2, pts.y2, pts.angleEnd, headColor, headLw); }
       
-      const lx = conn.customMid ? conn.customMid.x : (pts.x1+pts.x2)/2; const ly = conn.customMid ? conn.customMid.y : (pts.y1+pts.y2)/2;
+      if(conn.startHead === 'arrow') { 
+          drawArrowHeadRotated(targetCtx, pts.x1, pts.y1, pts.angleStart, headColor, headLw); 
+      }
+      if(conn.endHead === 'arrow') { 
+          drawArrowHeadRotated(targetCtx, pts.x2, pts.y2, pts.angleEnd, headColor, headLw); 
+      }
+      
+      const lx = conn.customMid ? conn.customMid.x : (pts.x1+pts.x2)/2; 
+      const ly = conn.customMid ? conn.customMid.y : (pts.y1+pts.y2)/2;
       
       if(conn.label) { 
-          targetCtx.fillStyle=isDarkMode ? '#fff' : '#333'; targetCtx.font=`13px ${conn.fontFamily || 'system-ui'}`; targetCtx.textAlign='center'; targetCtx.textBaseline='middle'; 
-          const tm = targetCtx.measureText(conn.label); targetCtx.fillStyle = isDarkMode ? '#16213e' : '#f4f4f4';
-          targetCtx.fillRect(lx - tm.width/2 - 4, ly - 10, tm.width + 8, 20); targetCtx.fillStyle=isDarkMode ? '#fff' : '#333'; targetCtx.fillText(conn.label, lx, ly); 
+          targetCtx.fillStyle = isDarkMode ? '#fff' : '#333'; 
+          targetCtx.font = `13px ${conn.fontFamily || 'system-ui'}`; 
+          targetCtx.textAlign = 'center'; 
+          targetCtx.textBaseline = 'middle'; 
+          const tm = targetCtx.measureText(conn.label); 
+          targetCtx.fillStyle = isDarkMode ? '#16213e' : '#f4f4f4';
+          targetCtx.fillRect(lx - tm.width/2 - 4, ly - 10, tm.width + 8, 20); 
+          targetCtx.fillStyle = isDarkMode ? '#fff' : '#333'; 
+          targetCtx.fillText(conn.label, lx, ly); 
       }
 
       if(conn.link) {
           const linkY = conn.label ? ly - 26 : ly - 14;
-          targetCtx.fillStyle = '#fff'; targetCtx.beginPath(); targetCtx.arc(lx, linkY, 11, 0, Math.PI*2); targetCtx.fill();
-          targetCtx.fillStyle = '#6c47ff'; targetCtx.beginPath(); targetCtx.arc(lx, linkY, 9, 0, Math.PI*2); targetCtx.fill();
-          targetCtx.fillStyle = '#fff'; targetCtx.font = '11px Arial'; targetCtx.textAlign = 'center'; targetCtx.textBaseline = 'middle'; targetCtx.fillText('🔗', lx, linkY);
+          targetCtx.fillStyle = '#fff'; 
+          targetCtx.beginPath(); 
+          targetCtx.arc(lx, linkY, 11, 0, Math.PI*2); 
+          targetCtx.fill();
+          targetCtx.fillStyle = '#6c47ff'; 
+          targetCtx.beginPath(); 
+          targetCtx.arc(lx, linkY, 9, 0, Math.PI*2); 
+          targetCtx.fill();
+          targetCtx.fillStyle = '#fff'; 
+          targetCtx.font = '11px Arial'; 
+          targetCtx.textAlign = 'center'; 
+          targetCtx.textBaseline = 'middle'; 
+          targetCtx.fillText('🔗', lx, linkY);
       }
   }
   targetCtx.restore();
 }
 
+// Função para desenhar a ponta da seta no Canvas (dependência da função acima)
 function drawArrowHeadRotated(targetCtx, x, y, angle, color, lw) {
   const l = 8 + lw * 1.5;   
   targetCtx.save();
@@ -1952,7 +2042,6 @@ function updateConnectionSVGs() {
       svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
       svg.classList.add('conn-svg-el');
       svg.dataset.connId = conn.id;
-      svg.style.cssText = 'position:absolute;left:0;top:0;width:0;height:0;overflow:visible;pointer-events:none;';
       domLayer.appendChild(svg);
     }
     svg.style.zIndex = conn._z !== undefined ? conn._z : -1;
@@ -1960,6 +2049,19 @@ function updateConnectionSVGs() {
 
     const data = buildConnectionSVGData(conn);
     if (!data) { svg.innerHTML = ''; delete existing[conn.id]; return; }
+
+    // CORREÇÃO: Calculando os limites exatos da seta para criar uma ViewBox rígida!
+    const pad = 40; // Margem para curvas e pontas da seta
+    const minX = Math.min(data.x1, data.x2, data.cx) - pad;
+    const maxX = Math.max(data.x1, data.x2, data.cx) + pad;
+    const minY = Math.min(data.y1, data.y2, data.cy) - pad;
+    const maxY = Math.max(data.y1, data.y2, data.cy) + pad;
+    const w = maxX - minX;
+    const h = maxY - minY;
+
+    // Damos dimensões físicas ao SVG para o html2canvas nunca mais o ignorar
+    svg.style.cssText = `position:absolute;left:${minX}px;top:${minY}px;width:${w}px;height:${h}px;overflow:visible;pointer-events:none;`;
+    svg.setAttribute('viewBox', `${minX} ${minY} ${w} ${h}`);
 
     const color = conn.color || '#555', lw = conn.lineWidth || 2;
     const dashAttr = conn.dash ? 'stroke-dasharray="8,5"' : '';
@@ -1981,6 +2083,62 @@ function updateConnectionSVGs() {
     }
     svg.innerHTML = html;
     delete existing[conn.id];
+  });
+
+  Object.values(existing).forEach(el => el.remove());
+}
+
+function updatePolygonBorderSVG(wrapper, el, points) {
+  let svg = wrapper.querySelector('.shape-border-svg');
+  const bWid = el.borderWidth || 0;
+  const bCol = el.borderColor || 'transparent';
+  if (bWid > 0) {
+    if (!svg) {
+      svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.className = 'shape-border-svg';
+      svg.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:visible;z-index:1;';
+      wrapper.insertBefore(svg, wrapper.firstChild);
+    }
+    svg.setAttribute('viewBox', `0 0 ${el.w} ${el.h}`);
+    // stroke-width doubled: a metade de fora é cortada pelo clip-path, sobra exatamente bWid
+    svg.innerHTML = `<polygon points="${points}" fill="none" stroke="${bCol}" stroke-width="${bWid * 2}" stroke-linejoin="miter"/>`;
+  } else {
+    if (svg) svg.remove();
+  }
+}
+
+function updatePenSVGs() {
+  const existing = {};
+  domLayer.querySelectorAll('.pen-svg-el').forEach(el => { existing[el.dataset.penId] = el; });
+
+  const flatElements = extractAllElements(elements);
+  flatElements.forEach((el, idx) => {
+    if (el.type !== 'pen' || !el.pts || el.pts.length < 2) return;
+
+    let svg = existing[el.id];
+    if (!svg) {
+      svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.classList.add('pen-svg-el');
+      svg.dataset.penId = el.id;
+      domLayer.appendChild(svg);
+    }
+    delete existing[el.id];
+
+    const b = getBounds(el);
+    const pad = Math.ceil((el.lineWidth || 2) * 2 + 4);
+    const minX = b.x - pad, minY = b.y - pad;
+    const w = b.w + pad * 2, h = b.h + pad * 2;
+
+    svg.style.cssText = `position:absolute;left:${minX}px;top:${minY}px;width:${w}px;height:${h}px;overflow:visible;pointer-events:none;z-index:${idx * 2};opacity:${el.opacity !== undefined ? el.opacity : 1};`;
+    svg.setAttribute('viewBox', `${minX} ${minY} ${w} ${h}`);
+
+    const d = 'M' + el.pts.map((p, i) => (i ? 'L' : '') + p[0] + ',' + p[1]).join(' ');
+    let rotAttr = '';
+    if (el.angle) {
+      const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+      rotAttr = `transform="rotate(${el.angle * 180 / Math.PI} ${cx} ${cy})"`;
+    }
+    svg.innerHTML = `<path d="${d}" stroke="${el.color || '#333'}" stroke-width="${el.lineWidth || 2}" fill="none" stroke-linecap="round" stroke-linejoin="round" ${rotAttr}/>`;
   });
 
   Object.values(existing).forEach(el => el.remove());
@@ -2029,8 +2187,10 @@ cvs.addEventListener('mousedown', e => {
               s._startDx = s.startX - mw.x; s._startDy = s.startY - mw.y;
               s._endDx   = s.endX   - mw.x; s._endDy   = s.endY   - mw.y;
           } else if(s.type !== 'connection') {
-              const b = getBounds(s); s._dx = mw.x - b.x; s._dy = mw.y - b.y;
-          }
+          const b = getBounds(s);
+          if (s.x === undefined || isNaN(s.x)) { s.x = b.x; s.y = b.y; s.w = b.w; s.h = b.h; }
+          s._dx = mw.x - b.x; s._dy = mw.y - b.y;
+      }
       });
       updatePropPanel();
     } else { if(!e.shiftKey) clearSelection(); isBoxSelecting = true; boxSelectStart = mw; boxSelectEnd = mw; }
@@ -2133,18 +2293,21 @@ window.addEventListener('mousemove', e => {
       }
 
       selected.forEach(s => {
-          if(s.type === 'connection') {
-              if(!s.fromId && !s.toId && s._startDx !== undefined) {
-                  // Conexão flutuante: move ambos os pontos
-                  s.startX = mw.x + s._startDx; s.startY = mw.y + s._startDy;
-                  s.endX   = mw.x + s._endDx;   s.endY   = mw.y + s._endDy;
-              }
-              return;
-          }
-          const dx = (mw.x - s._dx + bestDx) - s.x;
-          const dy = (mw.y - s._dy + bestDy) - s.y;
-          moveElementAbsolute(s, dx, dy);
-      });
+            if(s.type === 'connection') {
+                if(!s.fromId && !s.toId && s._startDx !== undefined) {
+                    // Conexão flutuante: move ambos os pontos
+                    s.startX = mw.x + s._startDx; s.startY = mw.y + s._startDy;
+                    s.endX   = mw.x + s._endDx;   s.endY   = mw.y + s._endDy;
+                }
+                return;
+            }
+            // Correção: Pega o x/y calculado para o lápis em vez da propriedade absoluta
+            const currentX = s.type === 'pen' ? getBounds(s).x : s.x;
+            const currentY = s.type === 'pen' ? getBounds(s).y : s.y;
+            const dx = (mw.x - s._dx + bestDx) - currentX;
+            const dy = (mw.y - s._dy + bestDy) - currentY;
+            moveElementAbsolute(s, dx, dy);
+        });
       render(); return;
   }
 
@@ -2309,9 +2472,17 @@ window.addEventListener('mouseup', e => {
     
     if(currentTool==='laser'){
         if(lasers.length) lasers[lasers.length-1].isDrawing = false; lastLaserActivity = Date.now();
-    } else if(currentTool==='pen'){ if(currentPath && currentPath.pts.length>1){pushUndo();elements.push(currentPath); saveLastProps(currentPath);} currentPath=null; 
-    } else {
-      let dx=mw2.x-drawStart.x, dy=mw2.y-drawStart.y; let el=null; const isClick = Math.abs(dx)<4 && Math.abs(dy)<4;
+    } else if(currentTool==='pen'){ 
+            if(currentPath && currentPath.pts.length>1){
+                pushUndo();
+                const b = getBounds(currentPath);
+                currentPath.x = b.x; currentPath.y = b.y; currentPath.w = b.w; currentPath.h = b.h;
+                elements.push(currentPath); 
+                saveLastProps(currentPath);
+            } 
+            currentPath=null; 
+          } else { 
+            let dx=mw2.x-drawStart.x, dy=mw2.y-drawStart.y; let el=null; const isClick = Math.abs(dx)<4 && Math.abs(dy)<4;
       if(currentTool==='text') {
           if(isClick) { el = newText(drawStart.x, drawStart.y, 20, 30); el.autoSize = true; } 
           else { const x=Math.min(drawStart.x,mw2.x), y=Math.min(drawStart.y,mw2.y), w=Math.abs(dx), h=Math.abs(dy); el = newText(x, y, w, h); el.autoSize = false; }
@@ -2529,14 +2700,30 @@ function applyResize(rh, mw, e) {
     const newLocalCx = x + w / 2, newLocalCy = y + bh / 2;
     const newWorldCenter = rotatePoint(newLocalCx, newLocalCy, rs.cx, rs.cy, angle);
     el.x = newWorldCenter.x - w / 2;
-    el.y = newWorldCenter.y - bh / 2;
-    el.w = w;
-    el.h = bh;
+  el.y = newWorldCenter.y - bh / 2;
+  el.w = w;
+  el.h = bh;
 
-    if (el.type === 'group') {
-        const origWorldCenter = { x: rs.cx, y: rs.cy };
-        applyGroupTransformDeep(el, rs.originalClone, scaleX, scaleY, newWorldCenter, origWorldCenter, angle);
-    }
+  if (el.type === 'pen') {
+      el.pts = rs.originalClone.pts.map(p => {
+          // Calcula a proporção (de 0 a 1) da posição do ponto em relação à caixa original
+          const normX = (p[0] - rs.x) / rs.w;
+          const normY = (p[1] - rs.y) / rs.h;
+          
+          // Mapeia exatamente a mesma proporção para a nova caixa redimensionada (w e bh)
+          return [
+              el.x + normX * w,
+              el.y + normY * bh
+          ];
+      });
+      // Ajusta a espessura da linha limitando para nunca sumir (min 1)
+      el.lineWidth = Math.max(1, rs.originalClone.lineWidth * scaleFactor);
+  }
+
+  if (el.type === 'group') {
+      const origWorldCenter = { x: rs.cx, y: rs.cy };
+      applyGroupTransformDeep(el, rs.originalClone, scaleX, scaleY, newWorldCenter, origWorldCenter, angle);
+  }
 
     if (enableSnapping && !el.angle && el.type !== 'pen' && el.type !== 'connection') {
         const { snapDx, snapDy, guides: snapGuides, spacingGuides: snapSpacing } = computeSnapGuides(el, el.x, el.y, el.w, el.h, true);
@@ -2914,7 +3101,9 @@ function elToSVG(el) {
       const pad = getShapePad(e); let wrapperStyle = `width:100%; height:100%; display:table; background-color:${(e.type==='text'?'transparent':e.color)};`;
       if(e.type !== 'text') { wrapperStyle += `border:${e.borderWidth}px solid ${e.borderColor};`; if(e.type === 'circle') wrapperStyle += 'border-radius:50%;'; else if(e.rx) wrapperStyle += `border-radius:${e.rx}px;`; }
       let textElStyle = `display:table-cell; vertical-align:${(e.type==='text'?'top':'middle')}; text-align:${e.textAlign||'center'}; padding:${pad}px; box-sizing:border-box; font-family:${ff.replace(/'/g, "&apos;")}; font-size:${e.fontSize||18}px; color:${e.textColor||'#333'}; overflow-wrap:break-word; word-break:normal; margin:0;`;
-      return `<foreignObject x="${e.x}" y="${e.y}" width="${e.w}" height="${e.h}" ${filterAttr} ${opa} ${transformAttr}><div xmlns="http://www.w3.org/1999/xhtml" style="${wrapperStyle}"><div style="${textElStyle}">${e.html || e.text || ''}</div></div></foreignObject>`;
+      
+      // A mágica: Adicionada a classe "dom-text-el" no container e aspas corretas no font-family
+      return `<foreignObject x="${e.x}" y="${e.y}" width="${e.w}" height="${e.h}" ${filterAttr} ${opa} ${transformAttr}><div xmlns="http://www.w3.org/1999/xhtml" style="${wrapperStyle}"><div class="dom-text-el" style="${textElStyle}">${e.html || e.text || ''}</div></div></foreignObject>`;
   };
 
   switch(el.type){
@@ -2934,6 +3123,319 @@ function elToSVG(el) {
 function connToSVG(conn) {
   const pts = getConnectionPoints(conn); if(!pts) return ''; const {x1,y1,x2,y2} = pts, opa = conn.opacity !== undefined ? `opacity="${conn.opacity}"` : '';
   return `<path d="M ${x1} ${y1} L ${x2} ${y2}" stroke="${conn.color}" stroke-width="${conn.lineWidth}" fill="transparent" ${conn.dash?`stroke-dasharray="8,5"`:''} ${opa}/>`;
+}
+
+function openExportModal() {
+  document.getElementById('export-modal-overlay').style.display = 'block';
+  document.getElementById('export-modal').style.display = 'block';
+  updateExportLabels();
+}
+function closeExportModal() {
+  document.getElementById('export-modal-overlay').style.display = 'none';
+  document.getElementById('export-modal').style.display = 'none';
+}
+function updateExportLabels() {
+  const fmt = document.querySelector('input[name="exp-fmt"]:checked').value;
+  const area = document.querySelector('input[name="exp-area"]:checked').value;
+  ['png','jpg'].forEach(v => {
+    const lbl = document.getElementById('exp-fmt-'+v+'-label');
+    lbl.style.borderColor = fmt === v ? '#6c47ff' : '#ddd';
+    lbl.style.background = fmt === v ? '#f5f3ff' : '';
+  });
+  ['view','full'].forEach(v => {
+    const lbl = document.getElementById('exp-area-'+v+'-label');
+    lbl.style.borderColor = area === v ? '#6c47ff' : '#ddd';
+    lbl.style.background = area === v ? '#f5f3ff' : '';
+  });
+}
+
+// Função auxiliar que carrega o html2canvas dinamicamente
+async function carregarMotorDeExportacao() {
+    if (typeof html2canvas !== 'undefined') return true;
+    return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+        script.onload = () => resolve(true);
+        script.onerror = () => reject('Erro ao carregar o motor de exportação.');
+        document.head.appendChild(script);
+    });
+}
+async function doExportImage() {
+  const fmt = document.querySelector('input[name="exp-fmt"]:checked').value;
+  const area = document.querySelector('input[name="exp-area"]:checked').value;
+  
+  const btn = document.querySelector('#export-modal button[onclick="doExportImage()"]');
+  if (btn) {
+      btn.innerText = 'Preparando...';
+      btn.disabled = true;
+  }
+
+  try {
+      await carregarMotorDeExportacao();
+      if (btn) btn.innerText = 'Capturando Tela...';
+      await exportAsImageTela(area, fmt);
+  } catch(err) {
+      console.error(err);
+      alert('Houve um erro ao processar a exportação.');
+  }
+
+  if (btn) {
+      btn.innerText = 'Exportar';
+      btn.disabled = false;
+  }
+  closeExportModal();
+}
+async function exportAsImageTela(area, fmt) {
+  const container = document.getElementById('canvas-container');
+
+  // 1. Limpar seleção para esconder caixas de edição
+  clearSelection();
+  const uiLayer = document.getElementById('ui-layer');
+  const originalUIDisplay = uiLayer.style.display;
+  uiLayer.style.display = 'none';
+
+  // 2. Guarda o estado original
+  const origViewX = viewX, origViewY = viewY, origScale = scale;
+  const origW = W, origH = H;
+  const origCvsW = cvs.width, origCvsH = cvs.height;
+
+  let captureWidth = W, captureHeight = H;
+
+  // 3. Setup de Quadro Completo
+  if (area === 'full') {
+      const bounds = getWorldBounds();
+      const pad = 128;
+      captureWidth = Math.ceil(bounds.w + pad * 2);
+      captureHeight = Math.ceil(bounds.h + pad * 2);
+
+      scale = 1;
+      viewX = -(bounds.x - pad);
+      viewY = -(bounds.y - pad);
+
+      W = captureWidth; H = captureHeight;
+      cvs.width = captureWidth; cvs.height = captureHeight;
+      connCvs.width = captureWidth; connCvs.height = captureHeight;
+      guideCvs.width = captureWidth; guideCvs.height = captureHeight;
+      container.style.width = captureWidth + 'px';
+      container.style.height = captureHeight + 'px';
+  }
+
+  render(); // Atualiza toda a tela para a nova escala/posicao
+
+  // Espera 100ms para o DOM processar as mudanças
+  await new Promise(r => setTimeout(r, 100));
+
+  // ========================================================================
+  // PREPARAÇÃO NATIVA: Usar o Canvas (Tinta Real) para burlar o html2canvas
+  // ========================================================================
+
+  // A. Ocultar SVGs que html2canvas não renderiza corretamente (conexões e lápis)
+  const svgConns = domLayer.querySelectorAll('.conn-svg-el');
+  svgConns.forEach(svg => svg.style.visibility = 'hidden');
+  const svgPens = domLayer.querySelectorAll('.pen-svg-el');
+  svgPens.forEach(svg => svg.style.visibility = 'hidden');
+
+  // B. Substituir shadows CSS por versões compatíveis com html2canvas
+  const originalFilters    = new Map(); // armazena filter + textShadow
+  const originalBoxShadows = new Map(); // armazena boxShadow (para evitar sombra dupla)
+  extractAllElements(elements).forEach(el => {
+      const wrapper = document.getElementById(el.domId);
+      if (!wrapper) return;
+
+      if (el.hasShadow) {
+          // filter: já é 'none' para não-texto; guardamos por garantia
+          originalFilters.set(wrapper, wrapper.style.filter);
+          wrapper.style.filter = 'none';
+
+          if (el.type === 'text') {
+              // Texto usa textShadow — html2canvas suporta bem
+              const textEl = wrapper.querySelector('.dom-text-el');
+              if (textEl) {
+                  originalFilters.set(textEl, textEl.style.textShadow);
+                  textEl.style.textShadow = `2px 3px 4px ${isDarkMode ? 'rgba(0,0,0,0.8)' : 'rgba(0,0,0,0.4)'}`;
+              }
+          } else {
+              // Para formas: remover boxShadow CSS para evitar sombra dupla com a
+              // sombra desenhada manualmente no canvas abaixo (seção C)
+              originalBoxShadows.set(wrapper, wrapper.style.boxShadow);
+              wrapper.style.boxShadow = 'none';
+          }
+      }
+  });
+
+  // C. Triângulos/Losangos: html2canvas ignora clip-path → desenhar fill+borda no ctx principal
+  //    e esvaziar o fundo do wrapper para que só o texto seja capturado pelo html2canvas
+  const polygonElStyles   = new Map();
+  const hiddenBorderSvgs  = [];
+  ctx.save();
+  ctx.translate(viewX, viewY);
+  ctx.scale(scale, scale);
+  extractAllElements(elements).forEach(el => {
+      if (el.type !== 'diamond' && el.type !== 'triangle') return;
+      const wrapper = document.getElementById(el.domId);
+      if (!wrapper) return;
+      // Salva e remove estilos que causam o "extra fill"
+      polygonElStyles.set(wrapper, {
+          bg: wrapper.style.backgroundColor,
+          cp: wrapper.style.clipPath,
+          bc: wrapper.style.borderColor,
+          bw: wrapper.style.borderWidth
+      });
+      wrapper.style.backgroundColor = 'transparent';
+      wrapper.style.clipPath         = 'none';
+      wrapper.style.borderColor      = 'transparent';
+      wrapper.style.borderWidth      = '0px';
+      // Oculta o SVG de borda (será desenhado diretamente no canvas)
+      const bSvg = wrapper.querySelector('.shape-border-svg');
+      if (bSvg) { bSvg.style.visibility = 'hidden'; hiddenBorderSvgs.push(bSvg); }
+      // Desenha o preenchimento e borda exatos no ctx (fica abaixo do DOM, acima do fundo)
+      ctx.save();
+      ctx.globalAlpha = el.opacity !== undefined ? el.opacity : 1;
+      if (el.angle) {
+          const cx = el.x + el.w / 2, cy = el.y + el.h / 2;
+          ctx.translate(cx, cy); ctx.rotate(el.angle); ctx.translate(-cx, -cy);
+      }
+      ctx.beginPath();
+      if (el.type === 'diamond') {
+          ctx.moveTo(el.x + el.w/2, el.y);
+          ctx.lineTo(el.x + el.w,   el.y + el.h/2);
+          ctx.lineTo(el.x + el.w/2, el.y + el.h);
+          ctx.lineTo(el.x,          el.y + el.h/2);
+          ctx.closePath();
+      } else {
+          ctx.moveTo(el.x + el.w/2, el.y);
+          ctx.lineTo(el.x + el.w,   el.y + el.h);
+          ctx.lineTo(el.x,          el.y + el.h);
+          ctx.closePath();
+      }
+      ctx.fillStyle = el.color || '#ffffff';
+      ctx.fill();
+      if ((el.borderWidth || 0) > 0) {
+          ctx.strokeStyle = el.borderColor || '#333';
+          ctx.lineWidth   = el.borderWidth;
+          ctx.lineJoin    = 'miter';
+          ctx.stroke();
+      }
+      ctx.restore();
+  });
+  ctx.restore();
+
+  // E. Desenhar sombras, lápis e conexões diretamente no connCtx (canvas acima do DOM)
+  connCtx.clearRect(0, 0, captureWidth, captureHeight);
+  connCtx.save();
+  connCtx.translate(viewX, viewY);
+  connCtx.scale(scale, scale);
+
+  // 1. Sombras de formas (desenhadas antes das conexões para ficarem atrás)
+  extractAllElements(elements).forEach(el => {
+      if (!el.hasShadow || el.type === 'text' || el.type === 'pen' || el.type === 'group') return;
+      connCtx.save();
+      if (el.angle) {
+          const cx = el.x + el.w / 2, cy = el.y + el.h / 2;
+          connCtx.translate(cx, cy); connCtx.rotate(el.angle); connCtx.translate(-cx, -cy);
+      }
+      connCtx.shadowColor = isDarkMode ? 'rgba(0,0,0,0.7)' : 'rgba(0,0,0,0.25)';
+      connCtx.shadowBlur = 14; connCtx.shadowOffsetX = 2; connCtx.shadowOffsetY = 4;
+      connCtx.fillStyle = 'black';
+      connCtx.beginPath();
+      if (el.type === 'circle')        { connCtx.arc(el.x + el.w/2, el.y + el.h/2, el.w/2, 0, Math.PI*2); }
+      else if (el.type === 'diamond')  { connCtx.moveTo(el.x+el.w/2,el.y); connCtx.lineTo(el.x+el.w,el.y+el.h/2); connCtx.lineTo(el.x+el.w/2,el.y+el.h); connCtx.lineTo(el.x,el.y+el.h/2); connCtx.closePath(); }
+      else if (el.type === 'triangle') { connCtx.moveTo(el.x+el.w/2,el.y); connCtx.lineTo(el.x+el.w,el.y+el.h); connCtx.lineTo(el.x,el.y+el.h); connCtx.closePath(); }
+      else if (el.type === 'rect')     { connCtx.beginPath(); roundRect(connCtx, el.x, el.y, el.w, el.h, el.rx||0); connCtx.closePath(); }
+      else                             { connCtx.rect(el.x, el.y, el.w, el.h); }
+      connCtx.fill();
+      // Apaga o sólido, deixa apenas o brilho da sombra
+      connCtx.shadowColor = 'transparent';
+      connCtx.globalCompositeOperation = 'destination-out';
+      connCtx.fill();
+      connCtx.restore();
+  });
+
+  // 2. Traços de caneta/lápis (redesenhados diretamente no canvas)
+  extractAllElements(elements).forEach(el => {
+      if (el.type !== 'pen' || !el.pts || el.pts.length < 2) return;
+      connCtx.save();
+      connCtx.globalAlpha = el.opacity !== undefined ? el.opacity : 1;
+      if (el.angle) {
+          const b = getBounds(el);
+          const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+          connCtx.translate(cx, cy); connCtx.rotate(el.angle); connCtx.translate(-cx, -cy);
+      }
+      connCtx.strokeStyle = el.color || '#333';
+      connCtx.lineWidth = el.lineWidth || 2;
+      connCtx.lineJoin = 'round'; connCtx.lineCap = 'round';
+      connCtx.beginPath();
+      connCtx.moveTo(el.pts[0][0], el.pts[0][1]);
+      el.pts.slice(1).forEach(p => connCtx.lineTo(p[0], p[1]));
+      connCtx.stroke();
+      connCtx.restore();
+  });
+
+  // 3. Conexões (ficam acima das sombras e dos traços)
+  connections.forEach(conn => drawConnectionOn(connCtx, conn));
+
+  connCtx.restore();
+
+  // ========================================================================
+  // 4. CAPTURA A FOTO
+  // ========================================================================
+  const canvasExport = await html2canvas(container, {
+      backgroundColor: (fmt === 'jpg' || isDarkMode) ? (isDarkMode ? '#16213e' : '#f4f4f4') : null,
+      scale: 2, 
+      useCORS: true,
+      logging: false,
+      width: captureWidth,
+      height: captureHeight,
+      x: 0,
+      y: 0
+  });
+
+  // ========================================================================
+  // 5. LIMPEZA E RESTAURAÇÃO (O quadro volta ao normal em um piscar de olhos)
+  // ========================================================================
+
+  svgConns.forEach(svg => svg.style.visibility = 'visible');
+  svgPens.forEach(svg => svg.style.visibility = 'visible');
+
+  originalFilters.forEach((val, node) => {
+      if (node.classList && node.classList.contains('dom-text-el')) {
+          node.style.textShadow = val || 'none';
+      } else {
+          node.style.filter = val || 'none';
+      }
+  });
+  originalBoxShadows.forEach((val, node) => { node.style.boxShadow = val || 'none'; });
+  polygonElStyles.forEach((s, wrapper) => {
+      wrapper.style.backgroundColor = s.bg;
+      wrapper.style.clipPath        = s.cp;
+      wrapper.style.borderColor     = s.bc;
+      wrapper.style.borderWidth     = s.bw;
+  });
+  hiddenBorderSvgs.forEach(svg => { svg.style.visibility = ''; });
+
+  uiLayer.style.display = originalUIDisplay;
+  
+  if (area === 'full') {
+      W = origW; H = origH;
+      cvs.width = origCvsW; cvs.height = origCvsH;
+      connCvs.width = origCvsW; connCvs.height = origCvsH;
+      guideCvs.width = origCvsW; guideCvs.height = origCvsH;
+      container.style.width = '100%';
+      container.style.height = '100%';
+  }
+  
+  scale = origScale; viewX = origViewX; viewY = origViewY;
+  
+  // O próprio render() limpa o "connCtx" e apaga todas as sombras manuais
+  render(); 
+
+  // 6. Download
+  const mime = fmt === 'jpg' ? 'image/jpeg' : 'image/png';
+  const dataUrl = canvasExport.toDataURL(mime, 0.95);
+  const a = document.createElement('a');
+  a.href = dataUrl; 
+  a.download = `OpenBoard-Export.${fmt}`; 
+  a.click();
 }
 
 function loadSVG() { document.getElementById('file-input').click(); }
