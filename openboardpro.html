@@ -2,7 +2,14 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>OpenBoard-PRO</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>OpenBoard PRO</title>
+<meta name="theme-color" content="#f4f4f4">
+<meta name="application-name" content="OpenBoard PRO">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="OpenBoard PRO">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%236c47ff'/><circle cx='50' cy='50' r='20' fill='white'/><circle cx='70' cy='30' r='8' fill='%23f0edff'/></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -930,7 +937,10 @@ function toggleTheme() {
   if (icon) icon.innerHTML = isDarkMode
     ? '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>'
     : '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
-  document.body.style.background = isDarkMode ? '#1a1a2e' : '#f4f4f4'; render();
+  document.body.style.background = isDarkMode ? '#1a1a2e' : '#f4f4f4';
+  const tc = document.querySelector('meta[name="theme-color"]');
+  if (tc) tc.content = isDarkMode ? '#16213e' : '#f4f4f4';
+  render();
 }
 function toggleSnapping() {
   enableSnapping = !enableSnapping;
@@ -3007,7 +3017,61 @@ if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').match
     isDarkMode = true;
     document.getElementById('theme-btn').innerHTML = '☀️ Modo Claro';
     document.body.style.background = '#1a1a2e';
+    const tc = document.querySelector('meta[name="theme-color"]');
+    if (tc) tc.content = '#16213e';
 }
+
+function setupPWA() {
+    // Gera ícone PNG 512×512 via canvas
+    const sz = 512;
+    const ic = document.createElement('canvas');
+    ic.width = sz; ic.height = sz;
+    const ix = ic.getContext('2d');
+    const r = sz * 0.18;
+    ix.fillStyle = '#6c47ff';
+    ix.beginPath();
+    ix.moveTo(r, 0); ix.lineTo(sz - r, 0); ix.arcTo(sz, 0, sz, r, r);
+    ix.lineTo(sz, sz - r); ix.arcTo(sz, sz, sz - r, sz, r);
+    ix.lineTo(r, sz); ix.arcTo(0, sz, 0, sz - r, r);
+    ix.lineTo(0, r); ix.arcTo(0, 0, r, 0, r);
+    ix.closePath(); ix.fill();
+    ix.fillStyle = '#ffffff';
+    ix.beginPath(); ix.arc(sz * 0.5, sz * 0.5, sz * 0.18, 0, Math.PI * 2); ix.fill();
+    ix.fillStyle = '#f0edff';
+    ix.beginPath(); ix.arc(sz * 0.70, sz * 0.30, sz * 0.09, 0, Math.PI * 2); ix.fill();
+    const iconDataUrl = ic.toDataURL('image/png');
+
+    // Substitui favicon por PNG (melhor compatibilidade nos atalhos do Chrome)
+    document.querySelectorAll('link[rel="icon"]').forEach(l => l.remove());
+    const favLink = document.createElement('link');
+    favLink.rel = 'icon'; favLink.type = 'image/png'; favLink.sizes = '512x512';
+    favLink.href = iconDataUrl;
+    document.head.appendChild(favLink);
+
+    // Apple Touch Icon (iOS / Android Chrome)
+    const appleLink = document.createElement('link');
+    appleLink.rel = 'apple-touch-icon'; appleLink.href = iconDataUrl;
+    document.head.appendChild(appleLink);
+
+    // Web App Manifest via Blob URL
+    const themeColor = isDarkMode ? '#16213e' : '#f4f4f4';
+    const manifest = {
+        name: 'OpenBoard PRO',
+        short_name: 'OpenBoard',
+        description: 'Quadro virtual colaborativo',
+        display: 'standalone',
+        orientation: 'any',
+        theme_color: themeColor,
+        background_color: themeColor,
+        start_url: '.',
+        icons: [{ src: iconDataUrl, sizes: '512x512', type: 'image/png', purpose: 'any maskable' }]
+    };
+    const mBlob = new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' });
+    const mLink = document.createElement('link');
+    mLink.rel = 'manifest'; mLink.href = URL.createObjectURL(mBlob);
+    document.head.appendChild(mLink);
+}
+window.addEventListener('load', setupPWA);
 
 window.addEventListener('resize',()=>{ 
     W=window.innerWidth;H=window.innerHeight;
