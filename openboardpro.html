@@ -13,9 +13,9 @@ body{overflow:hidden;background:#f4f4f4;font-family:system-ui,sans-serif; transi
 #canvas-container {position:absolute;top:0;left:0;width:100%;height:100%;overflow:hidden;}
 #canvas{position:absolute;top:0;left:0;width:100%;height:100%;cursor:default;z-index:1;}
 #dom-layer {position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2;transform-origin:0 0;}
-/* Novo canvas de conexões, acima do dom-layer */
-#conn-canvas {position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2;}
-/* Canvas de guias, acima das conexões */
+/* Canvas de preview de conexão: deve ficar acima de todos os elementos e guias */
+#conn-canvas {position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9;}
+/* Canvas de guias */
 #guide-canvas {position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:8;}
 #laser-canvas {position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9;}
 #ui-layer {position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:10;transform-origin:0 0;}
@@ -1353,6 +1353,13 @@ function hitTest(el, wx, wy, padding = 0) {
   return false;
 }
 
+function getConnAt(clientX, clientY) {
+    for(let i = connections.length-1; i>=0; i--) {
+        if(hitTestConnection(connections[i], clientX, clientY)) return connections[i];
+    }
+    return null;
+}
+
 function hitTestConnection(conn, cx, cy) {
     // Permanece usando ctx (canvas principal invisível para a linha em si) apenas para detecção de clique
     ctx.save();
@@ -1992,7 +1999,9 @@ cvs.addEventListener('mousedown', e => {
   dragConstraintAxis = null; 
 
   if(currentTool==='select') {
-    const el=getElAt(mw.x,mw.y, e.clientX, e.clientY);
+    // Conexões têm prioridade de clique (são renderizadas acima dos elementos)
+    const connHit = getConnAt(e.clientX, e.clientY);
+    const el = connHit || getElAt(mw.x,mw.y, e.clientX, e.clientY);
     if(el) {
       if((e.ctrlKey || e.metaKey) && el.link) {
           let url = el.link;
@@ -2003,8 +2012,16 @@ cvs.addEventListener('mousedown', e => {
 
       if(e.shiftKey || e.ctrlKey) { toggleSelection(el); } else { if(!isSelected(el)) { selected=[el]; } }
       if(e.altKey && !resizeHandle) { pushUndo(); const cloned = []; selected.forEach(s => { let c = JSON.parse(JSON.stringify(s)); c.id = uid(); c.domId = undefined; if(c.type === 'connection') connections.push(c); else elements.push(c); cloned.push(c); }); selected = cloned; }
-      isDragging=true;  
-      selected.forEach(s => { if(s.type !== 'connection') { const b = getBounds(s); s._dx = mw.x - b.x; s._dy = mw.y - b.y; } }); 
+      isDragging=true;
+      selected.forEach(s => {
+          if(s.type === 'connection' && !s.fromId && !s.toId) {
+              // Conexão flutuante: registra offsets para arrastar ambos os pontos
+              s._startDx = s.startX - mw.x; s._startDy = s.startY - mw.y;
+              s._endDx   = s.endX   - mw.x; s._endDy   = s.endY   - mw.y;
+          } else if(s.type !== 'connection') {
+              const b = getBounds(s); s._dx = mw.x - b.x; s._dy = mw.y - b.y;
+          }
+      });
       updatePropPanel();
     } else { if(!e.shiftKey) clearSelection(); isBoxSelecting = true; boxSelectStart = mw; boxSelectEnd = mw; }
   } else if(currentTool==='arrow') {
@@ -2037,7 +2054,12 @@ window.addEventListener('mousemove', e => {
 
   const isConnectMode = (currentTool === 'arrow') || (connectStart !== null);
 
-  if (isConnectMode && hoveredEl) {
+  if (connectStart !== null) {
+      // Arrastando uma conexão: atualiza hoveredEl dinamicamente para o elemento mais ao topo no cursor
+      const atMouse = getElAt(mw.x, mw.y, e.clientX, e.clientY);
+      const candidate = (atMouse && atMouse.type !== 'connection' && atMouse.type !== 'pen' && atMouse.type !== 'group') ? atMouse : null;
+      hoveredEl = candidate;
+  } else if (isConnectMode && hoveredEl) {
       const stillNear = hitTest(hoveredEl, mw.x, mw.y, 50 / scale);
       if (!stillNear) {
           hoveredEl = getElAt(mw.x, mw.y, e.clientX, e.clientY);
@@ -2055,10 +2077,24 @@ window.addEventListener('mousemove', e => {
   activeSnapPort = null;
   let isModifyingArrow = (currentTool === 'arrow') || (connectStart !== null) || (resizeHandle && (resizeHandle.handle.id === 'conn-start' || resizeHandle.handle.id === 'conn-end'));
   if(isModifyingArrow) {
-      if(hoveredEl && hoveredEl.type !== 'connection' && hoveredEl.type !== 'pen' && hoveredEl.type !== 'group') {
-          const p = nearestPort(hoveredEl, mw.x, mw.y, 16); 
-          if(Math.hypot(mw.x - p.x, mw.y - p.y) < 40 / scale) { 
-              activeSnapPort = p; mw.x = p.x; mw.y = p.y; 
+      let snapEl = (hoveredEl && hoveredEl.type !== 'connection' && hoveredEl.type !== 'pen' && hoveredEl.type !== 'group') ? hoveredEl : null;
+      if (!snapEl) {
+          // Mouse pode estar sobre uma bolinha de porta (fora dos bounds do elemento): varrer todos
+          let bestPortDist = 40 / scale;
+          elements.forEach(el => {
+              if (el.type === 'pen' || el.type === 'connection' || el.type === 'group') return;
+              ['top','bottom','left','right'].forEach(side => {
+                  const p = getConnectorPort(el, side, 16);
+                  const d = Math.hypot(mw.x - p.x, mw.y - p.y);
+                  if (d < bestPortDist) { bestPortDist = d; snapEl = el; }
+              });
+          });
+          if (snapEl) hoveredEl = snapEl;
+      }
+      if (snapEl) {
+          const p = nearestPort(snapEl, mw.x, mw.y, 16);
+          if (Math.hypot(mw.x - p.x, mw.y - p.y) < 40 / scale) {
+              activeSnapPort = p; mw.x = p.x; mw.y = p.y;
           }
       }
   }
@@ -2087,7 +2123,14 @@ window.addEventListener('mousemove', e => {
       }
 
       selected.forEach(s => {
-          if(s.type === 'connection') return;
+          if(s.type === 'connection') {
+              if(!s.fromId && !s.toId && s._startDx !== undefined) {
+                  // Conexão flutuante: move ambos os pontos
+                  s.startX = mw.x + s._startDx; s.startY = mw.y + s._startDy;
+                  s.endX   = mw.x + s._endDx;   s.endY   = mw.y + s._endDy;
+              }
+              return;
+          }
           const dx = (mw.x - s._dx + bestDx) - s.x;
           const dy = (mw.y - s._dy + bestDy) - s.y;
           moveElementAbsolute(s, dx, dy);
@@ -2141,10 +2184,23 @@ window.addEventListener('mouseup', e => {
   let snapTarget = null;
   let isModifyingArrow = (currentTool === 'arrow') || (connectStart !== null) || (resizeHandle && (resizeHandle.handle.id === 'conn-start' || resizeHandle.handle.id === 'conn-end'));
   if(isModifyingArrow) {
-      const snapEl = getElAt(mw.x, mw.y, e.clientX, e.clientY);
+      let snapEl = getElAt(mw.x, mw.y, e.clientX, e.clientY);
+      if (!snapEl || snapEl.type === 'connection' || snapEl.type === 'pen' || snapEl.type === 'group') {
+          // Mouse pode estar sobre uma bolinha de porta (fora dos bounds do elemento): varrer todos
+          let bestPortDist = 40 / scale;
+          snapEl = null;
+          elements.forEach(el => {
+              if (el.type === 'pen' || el.type === 'connection' || el.type === 'group') return;
+              ['top','bottom','left','right'].forEach(side => {
+                  const p = getConnectorPort(el, side, 16);
+                  const d = Math.hypot(mw.x - p.x, mw.y - p.y);
+                  if (d < bestPortDist) { bestPortDist = d; snapEl = el; }
+              });
+          });
+      }
       if(snapEl && snapEl.type !== 'connection' && snapEl.type !== 'pen' && snapEl.type !== 'group') {
-          const p = nearestPort(snapEl, mw.x, mw.y, 16); 
-          if(Math.hypot(mw.x - p.x, mw.y - p.y) < 40 / scale) { 
+          const p = nearestPort(snapEl, mw.x, mw.y, 16);
+          if(Math.hypot(mw.x - p.x, mw.y - p.y) < 40 / scale) {
               mw.x = p.x; mw.y = p.y; snapTarget = snapEl;
           }
       }
