@@ -2044,14 +2044,12 @@ function updateConnectionSVGs() {
       svg.dataset.connId = conn.id;
       domLayer.appendChild(svg);
     }
-    svg.style.zIndex = conn._z !== undefined ? conn._z : -1;
-    svg.style.opacity = conn.opacity !== undefined ? conn.opacity : 1;
 
     const data = buildConnectionSVGData(conn);
     if (!data) { svg.innerHTML = ''; delete existing[conn.id]; return; }
 
-    // CORREÇÃO: Calculando os limites exatos da seta para criar uma ViewBox rígida!
-    const pad = 40; // Margem para curvas e pontas da seta
+    // Calculando os limites exatos da seta para criar uma ViewBox rígida!
+    const pad = 40; 
     const minX = Math.min(data.x1, data.x2, data.cx) - pad;
     const maxX = Math.max(data.x1, data.x2, data.cx) + pad;
     const minY = Math.min(data.y1, data.y2, data.cy) - pad;
@@ -2059,8 +2057,12 @@ function updateConnectionSVGs() {
     const w = maxX - minX;
     const h = maxY - minY;
 
-    // Damos dimensões físicas ao SVG para o html2canvas nunca mais o ignorar
-    svg.style.cssText = `position:absolute;left:${minX}px;top:${minY}px;width:${w}px;height:${h}px;overflow:visible;pointer-events:none;`;
+    // CAPTURAMOS O Z-INDEX E OPACITY AQUI
+    const zIndex = conn._z !== undefined ? conn._z : -1;
+    const opacity = conn.opacity !== undefined ? conn.opacity : 1;
+
+    // E INCLUÍMOS DIRETAMENTE NO cssText PARA NÃO SEREM SOBRESCRITOS
+    svg.style.cssText = `position:absolute;left:${minX}px;top:${minY}px;width:${w}px;height:${h}px;overflow:visible;pointer-events:none;z-index:${zIndex};opacity:${opacity};`;
     svg.setAttribute('viewBox', `${minX} ${minY} ${w} ${h}`);
 
     const color = conn.color || '#555', lw = conn.lineWidth || 2;
