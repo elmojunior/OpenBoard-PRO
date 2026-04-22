@@ -3054,14 +3054,15 @@ function setupPWA() {
     document.head.appendChild(appleLink);
 
     // Manifest gerado internamente via Blob URL (sem arquivo externo)
-    const scope = location.pathname.replace(/[^/]+$/, '');
+    const startUrl = location.href.split('?')[0];
+    const scope = startUrl.replace(/[^/]+$/, '');
     const themeColor = isDarkMode ? '#16213e' : '#f4f4f4';
     const manifest = {
         name: 'OpenBoard PRO', short_name: 'OpenBoard',
         description: 'Quadro virtual colaborativo',
         display: 'standalone', orientation: 'any',
         theme_color: themeColor, background_color: themeColor,
-        start_url: location.pathname, scope,
+        start_url: startUrl, scope,
         icons: [
             { src: iconDataUrl, sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
         ]
