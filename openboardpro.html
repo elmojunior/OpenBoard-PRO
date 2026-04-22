@@ -2889,7 +2889,7 @@ function saveSVG() {
       };
       return cloneClean(e);
   });
-  svg+=`<desc data-wb="${btoa(unescape(encodeURIComponent(JSON.stringify({elements: cleanElements,connections}))))}"></desc>`;
+  svg+=`<desc data-wb="${btoa(unescape(encodeURIComponent(JSON.stringify({elements: cleanElements,connections,customFonts}))))}"></desc>`;
   connections.forEach(conn=>{ svg+=connToSVG(conn); }); elements.forEach(el=>{ svg+=elToSVG(el); }); svg+=`</svg>`;
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([svg],{type:'image/svg+xml'})); a.download='quadro-branco.svg'; a.click();
 }
@@ -2942,7 +2942,39 @@ function onFileLoad(e) {
   reader.onload=ev=>{
     const desc=new DOMParser().parseFromString(ev.target.result,'image/svg+xml').querySelector('desc[data-wb]');
     if(desc){
-      try{ const state=JSON.parse(decodeURIComponent(escape(atob(desc.dataset.wb)))); pushUndo(); elements=state.elements||[]; connections=state.connections||[]; domLayer.innerHTML = ''; selected=[]; updatePropPanel(); zoomFit(); render(); }
+      try{
+        const state=JSON.parse(decodeURIComponent(escape(atob(desc.dataset.wb))));
+        pushUndo();
+        elements=state.elements||[]; connections=state.connections||[];
+        domLayer.innerHTML = ''; selected=[];
+
+        // Restaura fontes personalizadas salvas no arquivo
+        const BUILTIN = 9;
+        const fontSel = document.getElementById('tf-font-family');
+        while (fontSel.options.length > BUILTIN) fontSel.remove(BUILTIN);
+        customFonts = [];
+        if (Array.isArray(state.customFonts)) {
+          state.customFonts.forEach(f => {
+            if (!f || !f.url || !f.name) return;
+            const linkId = 'gfont-' + f.name.replace(/\s/g, '-');
+            if (!document.getElementById(linkId)) {
+              const lk = document.createElement('link');
+              lk.id = linkId; lk.rel = 'stylesheet';
+              lk.href = f.url.includes('display=') ? f.url : f.url + '&display=swap';
+              document.head.appendChild(lk);
+            }
+            customFonts.push({ name: f.name, url: f.url });
+            if (!Array.from(fontSel.options).some(o => o.value === f.name)) {
+              const opt = document.createElement('option');
+              opt.value = f.name; opt.textContent = f.name;
+              fontSel.appendChild(opt);
+            }
+          });
+          renderLoadedFontsList();
+        }
+
+        updatePropPanel(); zoomFit(); render();
+      }
       catch(err){ alert('Erro ao carregar.'); }
     } else alert('SVG não contém dados do app.');
   }; reader.readAsText(file); e.target.value='';
