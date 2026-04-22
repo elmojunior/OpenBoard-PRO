@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="OpenBoard PRO">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%236c47ff'/><circle cx='50' cy='50' r='20' fill='white'/><circle cx='70' cy='30' r='8' fill='%23f0edff'/></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='18' fill='%236c47ff'/><circle cx='50' cy='50' r='18' fill='white'/><circle cx='70' cy='30' r='8' fill='%23f0edff'/></svg>" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
@@ -3022,7 +3022,7 @@ if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').match
 }
 
 function setupPWA() {
-    // Gera ícone PNG 512×512 via canvas
+    // Gera ícone PNG 512×512 via canvas (tudo embutido no HTML)
     const sz = 512;
     const ic = document.createElement('canvas');
     ic.width = sz; ic.height = sz;
@@ -3041,35 +3041,41 @@ function setupPWA() {
     ix.beginPath(); ix.arc(sz * 0.70, sz * 0.30, sz * 0.09, 0, Math.PI * 2); ix.fill();
     const iconDataUrl = ic.toDataURL('image/png');
 
-    // Substitui favicon por PNG (melhor compatibilidade nos atalhos do Chrome)
+    // Substitui favicon SVG por PNG gerado (melhor compatibilidade nos atalhos do Chrome)
     document.querySelectorAll('link[rel="icon"]').forEach(l => l.remove());
     const favLink = document.createElement('link');
     favLink.rel = 'icon'; favLink.type = 'image/png'; favLink.sizes = '512x512';
     favLink.href = iconDataUrl;
     document.head.appendChild(favLink);
 
-    // Apple Touch Icon (iOS / Android Chrome)
+    // Apple Touch Icon (iOS / Android)
     const appleLink = document.createElement('link');
     appleLink.rel = 'apple-touch-icon'; appleLink.href = iconDataUrl;
     document.head.appendChild(appleLink);
 
-    // Web App Manifest via Blob URL
+    // Manifest gerado internamente via Blob URL (sem arquivo externo)
+    const scope = location.pathname.replace(/[^/]+$/, '');
     const themeColor = isDarkMode ? '#16213e' : '#f4f4f4';
     const manifest = {
-        name: 'OpenBoard PRO',
-        short_name: 'OpenBoard',
+        name: 'OpenBoard PRO', short_name: 'OpenBoard',
         description: 'Quadro virtual colaborativo',
-        display: 'standalone',
-        orientation: 'any',
-        theme_color: themeColor,
-        background_color: themeColor,
-        start_url: '.',
-        icons: [{ src: iconDataUrl, sizes: '512x512', type: 'image/png', purpose: 'any maskable' }]
+        display: 'standalone', orientation: 'any',
+        theme_color: themeColor, background_color: themeColor,
+        start_url: location.pathname, scope,
+        icons: [
+            { src: iconDataUrl, sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
+        ]
     };
+    document.querySelectorAll('link[rel="manifest"]').forEach(l => l.remove());
     const mBlob = new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' });
     const mLink = document.createElement('link');
     mLink.rel = 'manifest'; mLink.href = URL.createObjectURL(mBlob);
     document.head.appendChild(mLink);
+
+    // Service Worker — único arquivo externo obrigatório (restrição do browser)
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./sw.js').catch(() => {});
+    }
 }
 window.addEventListener('load', setupPWA);
 
